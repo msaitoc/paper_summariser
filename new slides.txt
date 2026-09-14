@@ -1,0 +1,19 @@
+Slide 6 — Panic Begins (bad equilibrium, rewind)
+Text: "But if everyone panics and withdraws at once…"
+Circles: reset to the slide-3 layout (split groups, orange left / blue right) but all 8 circles are empty and untouched — this is a rewind to period 1, not a continuation, so no fill overflow yet. The key difference from slide 3: framing/motion should feel abrupt/urgent (e.g., a faster transition, slight simultaneous jitter or a "rush" cue) rather than the calm split of slide 3.
+Bank: back to 80% solid + 20% dotted (pre-drawdown state, same as end of slide 2/3).
+Timeline: pointer at 1.
+Motion: all 8 circles converge/rush toward the bank simultaneously (unlike slide 4, where only type 1 approached) — this is the visual tell that both types are now trying to withdraw together.
+Slide 7 — Bank Runs Dry (sequential service constraint)
+Text: "…the bank can run dry before everyone is paid."
+Circles: process a queue of 8 in interleaved order (e.g., alternating type1/type2 to show it's about queue position, not type): the first 6 in line fill to fillLevel = 1 (normal payout, no overflow — no insurance premium in a run), staggered by queue position. The last 2 in line (make at least one blue/type-2 to make the point that even patient depositors get caught) turn red with a dashed border and stay empty (fillLevel 0) — they got nothing.
+Bank: solid fill drains 80% → 0%; dotted region also drops to 0 (never gets realized/paid out).
+Timeline: stays at 1.
+Motion: sequential staggered fill down the queue order, ending with the last two circles flipping to the red/dashed "failed" state instead of filling.
+Slide 8 — Resolution (deposit insurance / suspension removes the panic incentive)
+Text: "A guarantee to honor deposits removes the reason to panic."
+Bank: small "INSURED" badge fades in above the "BANK" label.
+Circles: identical end-state to slide 4 (orange type-1 circles filled to ~1.15, staggered; blue type-2 circles remain calm and empty, no rush toward the bank).
+Bank fill: matches slide 4 (50% solid, 20% dotted, still un-realized).
+Timeline: stays at 1.
+Motion: minimal — mainly the badge fade-in plus the same calm type-1 withdrawal animation from slide 4, deliberately reused to visually assert "same good equilibrium, now guaranteed to hold."
