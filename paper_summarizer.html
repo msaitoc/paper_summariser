@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Diamond–Dybvig: Bank Runs & Liquidity</title>
+
+<style>
+
+  :root{
+
+    --bg:#f7f6f2; --panel:#ffffff; --ink:#1f2430; --muted:#5b6472;
+
+    --line:#d7d2c6; --type1:#c8791f; --type2:#1f8a80;
+
+    --danger:#c0392b; --accent:#3b5bdb; --cash:#e3ded2;
+
+  }
+
+  *{box-sizing:border-box}
+
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+
+  .app{display:flex;height:100%;min-height:600px}
+
+ 
+
+  .periodctl{position:absolute;opacity:0;pointer-events:none;width:0;height:0}
+
+ 
+
+  /* ---------- Left map ---------- */
+
+  .map{width:212px;flex-shrink:0;border-right:1px solid var(--line);background:var(--panel);
+
+    padding:14px 8px 10px;display:flex;flex-direction:column}
+
+  .map .map-title{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+
+    color:var(--muted);margin:0 0 6px;padding-left:6px}
+
+  .map svg{flex:1;width:100%;display:block}
+
+  .node{opacity:.5;transition:opacity .3s}
+
+  .node .box{fill:#faf9f5;stroke-width:1.6}
+
+ 
+
+  /* ---------- Main stage ---------- */
+
+  .stage{flex:1;display:flex;flex-direction:column;padding:16px 20px;min-width:0}
+
+  .headline{
+
+    min-height:82px;background:var(--panel);border:1px solid var(--line);
+
+    border-radius:10px;padding:14px 18px;display:flex;align-items:center;
+
+    font-size:17px;line-height:1.45;color:var(--ink);
+
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+
+  }
+
+  .headline b{color:var(--accent)}
+
+  .headline .warnb{color:var(--danger)}
+
+  .headline .hl{display:none}
+
+  svg{flex:1;width:100%;display:block;margin-top:8px}
+
+ 
+
+  /* ---------- Controls ---------- */
+
+  .controls{display:flex;align-items:center;gap:12px;margin-top:6px}
+
+  .btn{font:inherit;font-size:14px;font-weight:600;cursor:pointer;
+
+    border:1px solid var(--line);background:var(--panel);color:var(--ink);
+
+    padding:8px 16px;border-radius:8px;transition:background .15s,border-color .15s,color .15s;
+
+    display:none;user-select:none;}
+
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+
+  .btn.disabled{opacity:.4;cursor:default;pointer-events:none}
+
+  .btn.confirm{border-color:var(--accent);color:var(--accent);background:#eef1fd;font-weight:700}
+
+  .btn.confirm:hover{background:#e2e7fb}
+
+  .period-tag{font-size:14px;color:var(--muted);font-weight:600}
+
+  .period-tag .pt{display:none}
+
+ 
+
+  /* ---------- Sidebar ---------- */
+
+  .sidebar{width:322px;flex-shrink:0;display:flex;flex-direction:column;
+
+    border-left:1px solid var(--line);background:var(--panel);}
+
+  .sb-half{flex:1;padding:16px 20px;overflow-y:auto}
+
+  .sb-half + .sb-half{border-top:1px solid var(--line)}
+
+  .sb-title{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+
+    color:var(--muted);margin:0 0 12px;}
+
+  .def{margin-bottom:14px;font-size:14px;line-height:1.45}
+
+  .def .term{font-weight:700;display:inline-flex;align-items:center;gap:7px;color:var(--ink)}
+
+  .swatch{width:12px;height:12px;border-radius:50%;display:inline-block}
+
+  .def p{margin:4px 0 0;color:var(--muted)}
+
+  .theory .th{display:none;font-size:13.5px;line-height:1.5;color:var(--ink)}
+
+  .theory .th p{margin:0 0 9px}
+
+  .theory .k{font-weight:700}
+
+  .theory .warn{color:var(--danger);font-weight:700}
+
+  .eq{display:block;background:#f3f1ea;border:1px solid var(--line);border-radius:6px;
+
+    padding:7px 9px;margin:7px 0;font-family:"Cambria Math",Georgia,serif;font-size:14px;}
+
+  .eq .n{float:right;color:var(--muted);font-style:italic;font-size:12px}
+
+ 
+
+  /* ============ STATE MACHINE (pure CSS, no JS) ============
+
+     States: p0 (deposit) → p1o,p2o (optimal branch) / p1r,p2r (run branch) */
+
+ 
+  #pI:checked ~ .stage svg #seg-ret {
+    opacity: 0;
+  }
+  .ret-label{opacity: 0; transition: opacity .2s ease;}
+
+  #p0:checked ~ .stage svg .ret-label,
+  #p1x:checked ~ .stage svg .ret-label,
+  #p1o:checked ~ .stage svg .ret-label,
+  #p1r:checked ~ .stage svg .ret-label { opacity: 1; transition: opacity .5s ease .4s;}
+  /* headlines / period tags / sidebar theory */
+
+  #pI:checked ~ .stage .hl-pI,
+
+  #p0:checked ~ .stage .hl-p0, #p1x:checked ~ .stage .hl-p1x, #p1o:checked ~ .stage .hl-p1o, #p2o:checked ~ .stage .hl-p2o,
+
+  #p1r:checked ~ .stage .hl-p1r{display:block}
+
+  #pI:checked ~ .stage .pt-pI,
+
+  #p0:checked ~ .stage .pt-p0, #p1x:checked ~ .stage .pt-p1x, #p1o:checked ~ .stage .pt-p1o, #p2o:checked ~ .stage .pt-p2o,
+
+  #p1r:checked ~ .stage .pt-p1r{display:inline}
+
+  #pI:checked ~ .sidebar .th-p0,
+
+  #p0:checked ~ .sidebar .th-p0, #p1x:checked ~ .sidebar .th-p1x, #p1o:checked ~ .sidebar .th-p1o, #p2o:checked ~ .sidebar .th-p2o,
+
+  #p1r:checked ~ .sidebar .th-p1r{display:block}
+
+ 
+
+  /* generic per-state visibility: .v hidden by default, shown when a matching .v-STATE fires.
+
+     An element may carry several v-STATE classes (e.g. shown in both p1o and p2o). */
+
+  .v{display:none}
+
+  #pI:checked ~ .stage svg .v-pI,
+
+  #p0:checked  ~ .stage svg .v-p0,
+
+  #p1x:checked ~ .stage svg .v-p1x,
+
+  #p1o:checked ~ .stage svg .v-p1o,
+
+  #p2o:checked ~ .stage svg .v-p2o,
+
+  #p1r:checked ~ .stage svg .v-p1r{display:block}
+
+  
+
+ 
+
+  /* ---- moving bank segments (shared by optimal + run branches) ---- */
+
+  #seg-t1,#seg-slice,#seg-t2,#seg-ret{transition:transform .6s cubic-bezier(.4,0,.2,1),opacity .5s ease .35s}
+
+  /* Period 1 (optimal or run): Type 1 principal + slice of Type 2 travel to the Type 1 consumer, then fade */
+
+  #p1o:checked ~ .stage svg #seg-t1,
+  #p1o:checked ~ .stage svg #seg-slice, #p2o:checked ~ .stage svg #seg-slice{transform:translate(-75px,50px);opacity:0}
+  #p2o:checked ~ .stage svg #seg-t1{transform:translate(-115,px);opacity:0}
+  #p2o:checked ~ .stage svg #seg-t2,
+  #p2o:checked ~ .stage svg #seg-ret{transform:translate(115px,38px);opacity:0}
+  
+  
+
+
+  /* the slice reads as part of Type 2's block until it separates in period 1 */
+
+  .slice-box{stroke:none;transition:y .6s,height .6s}
+
+  .seg-t2-box{transition:y .6s,height .6s}
+
+  #p1x:checked ~ .stage svg .slice-box,
+
+  #p1o:checked ~ .stage svg .slice-box, #p2o:checked ~ .stage svg .slice-box,
+
+  #p1r:checked ~ .stage svg .slice-box{stroke:#8a8375;stroke-width:1.5;stroke-dasharray:4 3}
+
+  /* the run takes a bigger slice out of Type 2's block (panic withdrawals) */
+
+
+
+
+
+  /* return: dotted & hollow until it matures in period 2, then solid teal */
+
+  .ret-box{fill:none;stroke:#5b6472;stroke-width:2;stroke-dasharray:6 5;transition:fill .5s,stroke .5s,y .6s,height .6s}
+
+  #p2o:checked ~ .stage svg .ret-box{fill:#8a8375;stroke:#8a8375;stroke-dasharray:none}
+
+ /* ---- sequential fill for investor circles ----*/
+ :root{ --seq-step: .15s; }
+  .ig-t1 .seq-1{ --seq-i:0 }
+  .ig-t1 .seq-2{ --seq-i:1 }
+  .ig-t1 .seq-3{ --seq-i:2 }
+  .ig-t1 .seq-4{ --seq-i:3 }
+  .ig-t2 .seq-1{ --seq-i:4 }
+  .ig-t2 .seq-2{ --seq-i:5 }
+  .ig-t2 .seq-3{ --seq-i:6 }
+  .ig-t2 .seq-4{ --seq-i:7 }
+
+
+  /* ---- investor circles: dashed ring = deposit; fill = amount returned ----
+
+     Fill starts empty (scale 0) and grows to its payout when that period arrives.
+
+     Fill > ring  ⇒ gained ;  fill < ring (visible gap) ⇒ lost.
+
+     Fill is translucent and the ring is painted on top (in markup order) so the ring
+
+     stays crisp even when the fill grows past it. The fill's transition is delayed so
+
+     the bank bars visibly arrive first, then the circle grows. */
+
+  .fill{transform-box:fill-box;transform-origin:center;transform:scale(0);fill-opacity:.55;
+
+        transition:transform .6s cubic-bezier(.4,0,.2,1) calc(.6s + (var(--seq-i,0) * var(--seq-step))),fill .4s ease}
+
+  .ring{transition:stroke .4s ease}
+
+  /* period 0: all depositors are identical, undifferentiated (shared grey) and clustered
+
+     together. at the p1x pause, they separate into two clusters and their colors reveal. */
+
+  #p1x:checked ~ .stage svg .fill-t1,
+
+  #p1o:checked ~ .stage svg .fill-t1, #p2o:checked ~ .stage svg .fill-t1,
+
+  #p1r:checked ~ .stage svg .fill-t1{fill:#c8791f}
+
+  #p1x:checked ~ .stage svg .ring-t1,
+
+  #p1o:checked ~ .stage svg .ring-t1, #p2o:checked ~ .stage svg .ring-t1,
+
+  #p1r:checked ~ .stage svg .ring-t1{stroke:#c8791f}
+
+  #p1x:checked ~ .stage svg .fill-t2,
+
+  #p1o:checked ~ .stage svg .fill-t2, #p2o:checked ~ .stage svg .fill-t2,
+
+  #p1r:checked ~ .stage svg .fill-t2{fill:#1f8a80}
+
+  #p1x:checked ~ .stage svg .ring-t2,
+
+  #p1o:checked ~ .stage svg .ring-t2, #p2o:checked ~ .stage svg .ring-t2,
+
+  #p1r:checked ~ .stage svg .ring-t2{stroke:#1f8a80}
+
+
+
+
+  /* ---- investor clusters: merged/grey in period 0, split apart from p1x on ---- */
+
+  .ig-t1,.ig-t2{transition:transform .7s cubic-bezier(.4,0,.2,1)}
+
+  .ig-t1{transform:translate(300px,330px)}
+
+  .ig-t2{transform:translate(380px,330px)}
+
+  #p1x:checked ~ .stage svg .ig-t1,
+
+  #p1o:checked ~ .stage svg .ig-t1, #p2o:checked ~ .stage svg .ig-t1,
+
+  #p1r:checked ~ .stage svg .ig-t1{transform:translate(250px,330px)}
+
+  #p1x:checked ~ .stage svg .ig-t2,
+
+  #p1o:checked ~ .stage svg .ig-t2, #p2o:checked ~ .stage svg .ig-t2,
+
+  #p1r:checked ~ .stage svg .ig-t2{transform:translate(430px,330px)}
+
+ 
+
+  /* ---- bank principal bars: grey/undifferentiated in period 0, recolor at the p1x reveal ---- */
+
+  .growbar{transition:fill .5s ease}
+
+  #p0:checked ~ .stage svg .growbar{fill:#8a8375}
+
+  /* optimal payouts (both types come out ahead) */
+
+  #p1o:checked ~ .stage svg .fill-t1, #p2o:checked ~ .stage svg .fill-t1{transform:scale(1.35)}
+
+  #p2o:checked ~ .stage svg .fill-t2{transform:scale(1.6)}
+
+
+
+  /* ---- Intro: dots sit as full, undrained circles; bars are still empty ---- */
+
+  #pI:checked ~ .stage svg .fill{transform:scale(1)}
+
+  #pI:checked ~ .stage svg .growbar{transform:scaleY(0)}
+
+ 
+
+  /* ---- Period 0 entrance: dots drain out, bars fill in grey ---- */
+
+  @keyframes drain{from{transform:scale(1)}to{transform:scale(0)}}
+
+  @keyframes fillbar{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+
+  .growbar{transform-box:fill-box;transform-origin:bottom}
+
+  #p0:checked ~ .stage svg .fill{animation:drain .4s cubic-bezier(.4,0,.2,1) calc(var(--seq-i,0) * var(--seq-step)) both}
+
+  #p0:checked ~ .stage svg .growbar{animation:fillbar .9s cubic-bezier(.4,0,.2,1) both .15s}
+
+ 
+
+  /* ---- period 1 (run) is a counterfactual branch off period 2 (optimal), not its sequel:
+
+     snap straight to the run's period-1 state with no travel/fade/grow animation. ---- */
+
+  #p1r:checked ~ .stage svg #seg-t2, #p1r:checked ~ .stage svg #seg-ret,
+
+  #p1r:checked ~ .stage svg .seg-t2-box, #p1r:checked ~ .stage svg .ret-box,
+
+  #p1r:checked ~ .stage svg .fill-t2{transition:none}
+
+  /* ...except the panic dot's ring, which slides to its broken-away position alongside its fill */
+
+  #p1r:checked ~ .stage svg .panic-t2.ring-t2{transition:transform .6s cubic-bezier(.4,0,.2,1)}
+
+ 
+
+  /* ---- period 1 run entrance: everyone's fill resets to empty, then one Type-2 dot (the
+
+     panicker) withdraws first, and a beat later the rest (Type 1) withdraw together — with
+
+     one of them coming up short because the bank can't make everyone whole at once. Using
+
+     @keyframes (not transitions) forces this to replay from empty every time p1r is entered,
+
+     regardless of what period 1/2 optimal already showed. ---- */
+
+  @keyframes runFillPanic{from{transform:scale(0)}to{transform:scale(1.35)}}
+
+  @keyframes runFillFull{from{transform:scale(0)}to{transform:scale(1.35)}}
+
+  @keyframes runFillShort{from{transform:scale(0)}to{transform:scale(.78)}}
+
+  #p1r:checked ~ .stage svg .panic-t2.fill-t2{animation:runFillPanic .4s cubic-bezier(.4,0,.2,1) calc(var(--seq-i) * var(--seq-step)) both}
+
+  #p1r:checked ~ .stage svg .fill-t1:not(.short-t1){animation:runFillFull .4s cubic-bezier(.4,0,.2,1)  calc(var(--seq-i) * var(--seq-step)) both}
+
+  #p1r:checked ~ .stage svg .short-t1.fill-t1{animation:runFillShort .4s cubic-bezier(.4,0,.2,1)  calc(var(--seq-i) * var(--seq-step)) both}
+
+ 
+
+  /* ---- timeline dot: position by period number, either branch ---- */
+
+  #dot{transform:translate(90px,0);transition:transform .55s cubic-bezier(.4,0,.2,1)}
+
+  #p1x:checked ~ .stage svg #dot, #p1o:checked ~ .stage svg #dot, #p1r:checked ~ .stage svg #dot{transform:translate(340px,0)}
+
+  #p2o:checked ~ .stage svg #dot{transform:translate(590px,0)}
+  /* ================================================================
+
+     >>> BANK RUN: ONE CONTINUOUS ANIMATION, NO BUTTONS <<<
+
+     ----------------------------------------------------------------
+
+     The whole bank-run scenario is a single automatic sequence that
+
+     plays the moment #p1r is checked — the scenario map only has one
+
+     "Period 1 / Bank run" leaf node, because there's nothing left to
+
+     click through here. In order, it shows:
+
+       1. all 4 Type 1 dots withdraw, exactly like period 1 optimal
+
+       2. one Type 2 dot panics and withdraws early too, at the same rate
+
+       3. the dotted "unrealized return" bar visibly shrinks — the extra
+
+          early claim means less principal is left invested
+
+       4. a short pause
+
+       5. the timeline dot advances from period 1 to period 2, and the
+
+          return bar matures (goes solid)
+
+       6. the matured pool splits among the three Type 2 who waited —
+
+          one of them comes up short, landing under its ring
+
+     Every element below is first forced back to its resting state with
+
+     transition:none, then driven entirely by @keyframes with an
+
+     explicit animation-delay (the --run-* custom properties), so the
+
+     whole thing resets and replays from scratch every time you arrive
+
+     at this state, regardless of what period 1/2 optimal left on screen.
+
+     ================================================================ */
+
+  :root{
+
+    --run-t1-start:      0s;     /* Type 1 dots begin withdrawing immediately */
+
+    --run-panic-start:   1s;     /* the one Type 2 panics right after Type 1 finishes */
+
+    --run-shrink-start:  1s;     /* the pool visibly shrinks at the same moment */
+
+    --run-travel1-start: 1.5s;   /* the liquidated funds leave the bank for good */
+
+    --run-pause-end:     2.6s;   /* short pause — then the clock advances */
+
+    --run-travel2-start: 3.15s;  /* the matured pool leaves for the Type 2 who waited */
+
+    --run-payout-start:  3.5s;   /* and splits unevenly among them */
+
+  }
+
+  #p1r:checked ~ .stage svg #seg-t1, #p1r:checked ~ .stage svg #seg-slice,
+
+  #p1r:checked ~ .stage svg #seg-t2, #p1r:checked ~ .stage svg #seg-ret,
+
+  #p1r:checked ~ .stage svg .slice-box, #p1r:checked ~ .stage svg .seg-t2-box, #p1r:checked ~ .stage svg .ret-box,
+
+  #p1r:checked ~ .stage svg .fill-t1, #p1r:checked ~ .stage svg .fill-t2,
+
+  #p1r:checked ~ .stage svg #dot{transition:none}
+
+ 
+
+  /* 1. Type 1 withdraws (identical to period 1 optimal); the panicking
+
+     Type 2 dot (its group's .seq-1, so first in line) withdraws right
+
+     after, landing at the same full payout. */
+
+  @keyframes runFillFull{from{transform:scale(0)}to{transform:scale(1.35)}}
+
+  #p1r:checked ~ .stage svg .fill-t1{animation:runFillFull .4s cubic-bezier(.4,0,.2,1) calc(var(--run-t1-start) + (var(--seq-i) * var(--seq-step))) both}
+
+  #p1r:checked ~ .stage svg .panic-t2.fill-t2{animation:runFillFull .4s cubic-bezier(.4,0,.2,1) var(--run-panic-start) both}
+
+ 
+
+  /* Type 1's principal + the slice liquidated from Type 2 leave the bank
+
+     for the withdrawing dots, once both withdrawals above have landed. */
+
+  @keyframes runTravel1{from{transform:translate(0,0);opacity:1}to{transform:translate(-105px,45px);opacity:0}}
+
+  #p1r:checked ~ .stage svg #seg-t1,
+
+  #p1r:checked ~ .stage svg #seg-slice{animation:runTravel1 .6s cubic-bezier(.4,0,.2,1) var(--run-travel1-start) both}
+
+ 
+
+  /* 2/3. the extra withdrawal means a bigger slice must be liquidated from
+
+     Type 2's stake — the slice grows and the remaining principal + the
+
+     dotted, not-yet-realized return bar visibly shrink to make room. */
+
+  @keyframes runSliceGrow{from{y:232.5;height:12.5}to{y:220;height:25}}
+
+  @keyframes runT2Shrink{from{height:62.5}to{height:50}}
+
+  @keyframes runRetShrink{from{y:107.5;height:62.5}to{y:120;height:50}}
+
+  #p1r:checked ~ .stage svg .slice-box{animation:runSliceGrow .5s cubic-bezier(.4,0,.2,1) var(--run-shrink-start) both}
+
+  #p1r:checked ~ .stage svg .seg-t2-box{animation:runT2Shrink .5s cubic-bezier(.4,0,.2,1) var(--run-shrink-start) both}
+
+ 
+
+  /* 4/5. short pause, then the clock advances to period 2 while the
+
+     shrunken return bar matures (goes solid) and the remaining pool
+
+     travels out to the Type 2 who waited. */
+
+  @keyframes moveTo2{from{transform:translate(340px,0)}to{transform:translate(590px,0)}}
+
+  #p1r:checked ~ .stage svg #dot{animation:moveTo2 .55s cubic-bezier(.4,0,.2,1) var(--run-pause-end) both}
+
+  @keyframes runRetMature{from{fill:none;stroke:#8a8375}to{fill:#8a8375;stroke:#8a8375}}
+
+  #p1r:checked ~ .stage svg .ret-box{animation:runRetShrink .5s cubic-bezier(.4,0,.2,1) var(--run-shrink-start) both,
+
+                                                runRetMature .5s ease var(--run-pause-end) both}
+
+  @keyframes runTravel2{from{transform:translate(0,0);opacity:1}to{transform:translate(105px,45px);opacity:0}}
+
+  #p1r:checked ~ .stage svg #seg-t2,
+
+  #p1r:checked ~ .stage svg #seg-ret{animation:runTravel2 .6s cubic-bezier(.4,0,.2,1) var(--run-travel2-start) both}
+
+ 
+
+  /* 6. the matured pool splits among the three who waited — two land at
+
+     the reduced (still positive) rate, one comes up especially short. */
+
+  @keyframes runFillWait{from{transform:scale(0)}to{transform:scale(1.33)}}
+
+  @keyframes runFillShort{from{transform:scale(0)}to{transform:scale(.72)}}
+
+  #p1r:checked ~ .stage svg .fill-t2:not(.panic-t2):not(.short-t2){animation:runFillWait .4s cubic-bezier(.4,0,.2,1) calc(var(--run-payout-start) + ((var(--seq-i) - 5) * var(--seq-step))) both}
+
+  #p1r:checked ~ .stage svg .short-t2.fill-t2{animation:runFillShort .4s cubic-bezier(.4,0,.2,1) calc(var(--run-payout-start) + ((var(--seq-i) - 5) * var(--seq-step))) both}
+ 
+
+  /* ---- map: highlight the active node ---- */
+
+  #pI:checked  ~ .map .n-p0,
+
+  #p0:checked  ~ .map .n-p0,
+
+  #p1x:checked ~ .map .n-p1o,
+
+  #p1o:checked ~ .map .n-p1o,
+
+  #p2o:checked ~ .map .n-p2o,
+
+  #p1r:checked ~ .map .n-p1r{opacity:1}
+
+  #pI:checked  ~ .map .n-p0  .box,
+
+  #p0:checked  ~ .map .n-p0  .box,
+
+  #p1x:checked ~ .map .n-p1o .box,
+
+  #p1o:checked ~ .map .n-p1o .box,
+
+  #p2o:checked ~ .map .n-p2o .box,
+
+  #p1r:checked ~ .map .n-p1r .box{stroke-width:3.4;fill:#fff}
+
+ 
+
+  /* ---- Prev / Next wiring (linear walk: pI → p0 → p1x → p1o → p2o → p1r → p2r) ---- */
+
+  #pI:checked  ~ .stage .controls .prev-dis,
+
+  #p0:checked  ~ .stage .controls .prevto-pI,
+
+  #p1x:checked ~ .stage .controls .prevto-p0,
+
+  #p1o:checked ~ .stage .controls .prevto-p1x,
+
+  #p2o:checked ~ .stage .controls .prevto-p1o,
+
+  #p1r:checked ~ .stage .controls .prevto-p2o,
+
+  #pI:checked  ~ .stage .controls .nextto-p0,
+
+  #p0:checked  ~ .stage .controls .nextto-p1x,
+
+  #p1x:checked ~ .stage .controls .nextto-p1o,
+
+  #p1o:checked ~ .stage .controls .nextto-p2o,
+
+  #p2o:checked ~ .stage .controls .nextto-p1r,
+
+  #p1r:checked ~ .stage .controls .next-dis{display:inline-block}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="app">
+
+ 
+
+  <input class="periodctl" type="radio" name="period" id="pI" checked>
+
+  <input class="periodctl" type="radio" name="period" id="p0">
+
+  <input class="periodctl" type="radio" name="period" id="p1x">
+
+  <input class="periodctl" type="radio" name="period" id="p1o">
+
+  <input class="periodctl" type="radio" name="period" id="p2o">
+
+  <input class="periodctl" type="radio" name="period" id="p1r">
+
+  
+
+ 
+
+  <!-- ============ LEFT MAP ============ -->
+
+  <aside class="map">
+
+    <h2 class="map-title">Scenario map</h2>
+
+    <svg viewBox="0 0 200 470" preserveAspectRatio="xMidYMin meet" aria-label="scenario map">
+
+      <g stroke="#c3bdae" stroke-width="1.6" fill="none">
+
+        <path d="M100,74 L100,110 M55,110 L145,110 M55,110 L55,150 M145,110 L145,150"/>
+
+        <line x1="55" y1="196" x2="55" y2="250"/>
+
+        <line x1="145" y1="196" x2="145" y2="250"/>
+
+      </g>
+
+ 
+
+      <g class="node n-p0">
+
+        <rect class="box" x="50" y="34" width="100" height="40" rx="8" stroke="#3b5bdb"/>
+
+        <text x="100" y="52" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1f2430">Period 0</text>
+
+        <text x="100" y="66" text-anchor="middle" font-size="11" fill="#5b6472">Deposit</text>
+
+      </g>
+
+ 
+
+      <g class="node n-p1o">
+
+        <rect class="box" x="12" y="150" width="86" height="46" rx="8" stroke="#1f8a80"/>
+
+        <text x="55" y="169" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2430">Period 1</text>
+
+        <text x="55" y="184" text-anchor="middle" font-size="10.5" fill="#1f8a80" font-weight="700">Optimal</text>
+
+      </g>
+
+      <g class="node n-p1r">
+
+        <rect class="box" x="102" y="150" width="86" height="46" rx="8" stroke="#c0392b"/>
+
+        <text x="145" y="169" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2430">Period 1</text>
+
+        <text x="145" y="184" text-anchor="middle" font-size="10.5" fill="#c0392b" font-weight="700">Bank run</text>
+
+      </g>
+
+ 
+
+      <g class="node n-p2o">
+
+        <rect class="box" x="12" y="250" width="86" height="46" rx="8" stroke="#1f8a80"/>
+
+        <text x="55" y="269" text-anchor="middle" font-size="12" font-weight="700" fill="#1f2430">Period 2</text>
+
+        <text x="55" y="284" text-anchor="middle" font-size="10.5" fill="#1f8a80" font-weight="700">Optimal</text>
+
+      </g>
+
+    </svg>
+
+  </aside>
+
+ 
+
+  <!-- ============ MAIN STAGE ============ -->
+
+  <div class="stage">
+
+    <div class="headline">
+
+      <span class="hl hl-pI">Depositors each invest one unit in the bank.</span>
+
+      <span class="hl hl-p0">In <b>period 2</b>, the bank will get a return on investments.</span>
+
+      <span class="hl hl-p1x">In <b>period 1</b>, some unlucky depositors privately learns they are type 1 and must withdraw early.</span>
+
+      <span class="hl hl-p1o">The bank provides an additional return as a form of insurance against being a type 1 investor.</span>
+
+      <span class="hl hl-p2o">In <b>period 2</b>, type 2 investors withdraw their deposits plus returns. </span>
+
+      <span class="hl hl-p1r"><span class="warnb">Bank run (period 1):</span> rumors spread, and <span class="warnb">one Type 2 dot panics and withdraws early too</span> &mdash; it cashes out first, breaking away from the rest of its group. Then Type 1 withdraw, but liquidating enough to cover everyone drains the pool faster than it can be topped up: <b>one dot doesn&rsquo;t get made whole</b> &mdash; its fill lands visibly short of its ring.</span>
+
+    </div>
+
+ 
+
+    <svg id="scene" viewBox="0 0 680 490" preserveAspectRatio="xMidYMid meet" aria-label="Diamond-Dybvig diagram">
+
+      <!-- ===== shared scaffolding ===== -->
+
+      <text x="345" y="96" text-anchor="middle" font-size="16" font-weight="700" fill="#1f2430">Bank </text>
+
+      <!--text x="345" y="44" text-anchor="middle" font-size="11.5" fill="#5b6472">Illustrative: 100 deposited &middot; Type 1 = &frac14; &middot; r&#8321; = 1.5 &middot; R = 2</text-->
+
+ 
+
+      <!-- investors: 4 small dots per type. fill = amount currently held (empty pre-deposit,
+
+           or payout once paid); dashed ring = amount deposited, drawn AFTER the fill so it
+
+           always reads crisply even when the (translucent) fill grows past it. All 8 dots
+
+           start merged into one undifferentiated grey cluster (.ig-t1/.ig-t2 both anchored
+
+           near the bank); from the p1x reveal on, the groups split apart and colors appear. -->
+
+      <text class="v v-pI v-p0" x="340" y="288" text-anchor="middle" font-size="13" font-weight="700" fill="#8a8375">Depositors</text>
+
+      /* ---- unrealized returns label ---- */
+    <g class="ret-label v v-p0 v-p1x v-p1o v-p2o v-p1r">
+      <path d="M388,138.75 L398,138.75" stroke="#5b6472" stroke-width="1.5" fill="none" marker-end="url(#arrowhead)"/>
+      <text x="402" y="142" font-size="12" fill="#5b6472" font-weight="600">Period 2 Returns</text>
+  
+    </g>
+
+
+      <g class="ig-t1">
+
+        <text class="v v-p1x v-p1o v-p2o v-p1r" x="10" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#c8791f">Type 1</text>
+
+        <circle class="fill fill-t1 seq-1" cx="-6" cy="-16" r="13" fill="#8a8375"/>
+
+        <circle class="ring ring-t1" cx="-6" cy="-16" r="13" fill="none" stroke="#8a8375" stroke-width="2" />
+
+        <circle class="fill fill-t1 seq-2" cx="26" cy="-16" r="13" fill="#8a8375"/>
+
+        <circle class="ring ring-t1" cx="26" cy="-16" r="13" fill="none" stroke="#8a8375" stroke-width="2" />
+
+        <circle class="fill fill-t1 seq-3" cx="-6" cy="16" r="13" fill="#8a8375"/>
+
+        <circle class="ring ring-t1" cx="-6" cy="16" r="13" fill="none" stroke="#8a8375" stroke-width="2" />
+
+        <circle class="fill fill-t1 seq-4" cx="26" cy="16" r="13" fill="#8a8375"/>
+
+        <circle class="ring ring-t1" cx="26" cy="16" r="13" fill="none" stroke="#8a8375" stroke-width="2" />
+
+      </g>
+
+ 
+
+      <g class="ig-t2">
+
+        <text class="v v-p1x v-p1o v-p2o v-p1r" x="-5" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#1f8a80">Type 2</text>
+
+        <circle class="fill fill-t2 seq-1" cx="-21" cy="-16" r="13" fill="#8a8375"/>
+
+        <circle class="ring ring-t2" cx="-21" cy="-16" r="13" fill="none" stroke="#8a8375" stroke-width="2" />
+
+        <circle class="fill fill-t2 seq-2" cx="11" cy="-16" r="13" fill="#8a8375"/>
+
+        <circle class="ring ring-t2" cx="11" cy="-16" r="13" fill="none" stroke="#8a8375" stroke-width="2" />
+
+        <circle class="fill fill-t2 short-t2 seq-3" cx="-21" cy="16" r="13" fill="#8a8375"/>
+
+        <circle class="ring ring-t2" cx="-21" cy="16" r="13" fill="none" stroke="#8a8375" stroke-width="2" />
+
+        <circle class="fill fill-t2 panic-t2 seq-4" cx="11" cy="16" r="13" fill="#8a8375"/>
+
+        <circle class="ring ring-t2 panic-t2" cx="11" cy="16" r="13" fill="none" stroke="#8a8375" stroke-width="2" />
+
+      </g>
+
+ 
+
+      <!-- persistent bank segments (animate across every period, optimal or run) -->
+
+      <!-- Type 1 principal (25) — leaves for Type 1 in period 1 -->
+
+      <g id="seg-t1">
+
+        <rect class="growbar" x="310" y="245" width="70" height="25" fill="#8a8375"/>
+
+      </g>
+
+      <!-- Type 2 slice that must be liquidated early to cover r1 (12.5 optimal, 25 if there's a panic) -->
+
+      <g id="seg-slice">
+
+        <rect class="slice-box growbar" x="310" y="232.5" width="70" height="12.5" fill="#8a8375"/>
+
+      </g>
+
+      <!-- Type 2 principal that stays invested (62.5 optimal, 50 if there's a panic) -->
+
+      <g id="seg-t2">
+
+        <rect class="seg-t2-box growbar" x="310" y="170" width="70" height="62.5" fill="#8a8375"/>
+
+      </g>
+
+      <!-- Unrealized return — dotted until it matures in period 2 (62.5 optimal, 50 if there's a panic) -->
+
+      <g id="seg-ret">
+
+        <rect class="ret-box seg-ret-box" x="310" y="107.5" width="70" height="62.5"/>
+
+      </g>
+
+ 
+
+      <!-- number line (period timeline) -->
+
+      <line x1="90" y1="440" x2="590" y2="440" stroke="#b8b2a4" stroke-width="2"/>
+
+      <line x1="90"  y1="434" x2="90"  y2="446" stroke="#b8b2a4" stroke-width="2"/>
+
+      <line x1="340" y1="434" x2="340" y2="446" stroke="#b8b2a4" stroke-width="2"/>
+
+      <line x1="590" y1="434" x2="590" y2="446" stroke="#b8b2a4" stroke-width="2"/>
+
+      <text x="90"  y="427" text-anchor="middle" font-size="13" font-weight="700" fill="#5b6472">0</text>
+
+      <text x="340" y="427" text-anchor="middle" font-size="13" font-weight="700" fill="#5b6472">1</text>
+
+      <text x="590" y="427" text-anchor="middle" font-size="13" font-weight="700" fill="#5b6472">2</text>
+
+      <g id="dot"><circle cx="0" cy="440" r="8" fill="#3b5bdb"/></g>
+
+    </svg>
+
+ 
+
+    <div class="controls">
+
+      <span class="btn prev-dis disabled">&lsaquo; Prev</span>
+
+      <label class="btn prevto-pI"  for="pI">&lsaquo; Prev</label>
+
+      <label class="btn prevto-p0"  for="p0">&lsaquo; Prev</label>
+
+      <label class="btn prevto-p1x" for="p1x">&lsaquo; Prev</label>
+
+      <label class="btn prevto-p1o" for="p1o">&lsaquo; Prev</label>
+
+      <label class="btn prevto-p2o" for="p2o">&lsaquo; Prev</label>
+
+
+
+ 
+
+      <span class="period-tag">
+
+        <span class="pt pt-pI">Introduction</span>
+
+        <span class="pt pt-p0">Period 0 &mdash; Deposit</span>
+
+        <span class="pt pt-p1x">Period 1 &mdash; Types revealed</span>
+
+        <span class="pt pt-p1o">Period 1 &mdash; Optimal (only Type 1 withdraw)</span>
+
+        <span class="pt pt-p2o">Period 2 &mdash; Optimal (return realized)</span>
+
+        <span class="pt pt-p1r">Period 1 &mdash; Bank run</span>
+
+
+      </span>
+
+ 
+
+      <label class="btn nextto-p0" for="p0">Next &rsaquo;</label>
+
+      <label class="btn nextto-p1x" for="p1x">Next &rsaquo;</label>
+
+      <label class="btn confirm nextto-p1o" for="p1o"> &#10003;</label>
+
+      <label class="btn nextto-p2o" for="p2o">Next &rsaquo;</label>
+
+      <label class="btn nextto-p1r" for="p1r">Next &rsaquo;</label>
+
+      <span class="btn next-dis disabled">Next &rsaquo;</span>
+
+    </div>
+
+  </div>
+
+ 
+
+  <!-- ============ SIDEBAR ============ -->
+
+  <aside class="sidebar">
+
+    <div class="sb-half">
+
+      <h2 class="sb-title">Definitions</h2>
+
+      <div class="def">
+
+        <span class="term"><span class="swatch" style="background:var(--type1)"></span>Type 1</span>
+
+        <p>Investors who must unexpectedly pull investment before returns.</p>
+
+      </div>
+
+      <div class="def">
+
+        <span class="term"><span class="swatch" style="background:var(--type2)"></span>Type 2</span>
+
+        <p>Investors who wait for return.</p>
+
+      </div>
+
+      <div class="def">
+
+        <span class="term">r&#8321;</span>
+
+        <p>Fixed claim per unit paid to anyone withdrawing early (period 1); r&#8321;&nbsp;&gt;&nbsp;1.</p>
+
+      </div>
+
+      <div class="def">
+
+        <span class="term">R</span>
+
+        <p>Gross return per unit if the investment matures to period 2; R&nbsp;&gt;&nbsp;r&#8321;.</p>
+
+      </div>
+
+    </div>
+
+ 
+
+    <div class="sb-half">
+
+      <h2 class="sb-title">Theory</h2>
+
+      <div class="theory">
+
+        <!-- Period 0 -->
+
+        <div class="th th-p0">
+
+          <p><span class="k">Setup (T = 0, 1, 2).</span> One unit invested yields the technology</p>
+
+          <span class="eq">&minus;1 &nbsp;&rarr;&nbsp; { 1 if stopped at T=1 ; &nbsp; R if held to T=2 }</span>
+
+          <p>so early liquidation returns only the principal, while patience earns R&nbsp;&gt;&nbsp;1.</p>
+
+        </div>
+
+        <!-- Period 1 reveal (pause) -->
+
+        <div class="th th-p1x">
+
+          <p><span class="k">Key assumption:</span> all agents are identical at T=0 and only <span class="k">privately learn their type at T=1</span>. A fraction <i>t</i> turn out to be Type 1. Because the type shock is unobservable, deposits provide <span class="k">liquidity insurance</span> that a market in claims cannot.</p>
+
+          <p>Take a moment to see the two groups form &mdash; everything that follows is about how the bank splits its pooled funds between them.</p>
+
+        </div>
+
+        <!-- Period 1 optimal -->
+
+        <div class="th th-p1o">
+
+          <p><span class="k">Demand-deposit contract:</span> a withdrawal at T=1 pays a fixed claim r&#8321; per unit, with <span class="k">1 &lt; r&#8321; &lt; R</span>. Payment per unit deposited is</p>
+
+          <span class="eq">V&#8321;(f<sub>j</sub>, r&#8321;) = r&#8321; if f<sub>j</sub> &lt; 1/r&#8321;, else 0 <span class="n">eq (2)</span></span>
+
+          <p>Only Type 1 withdraw (the <span class="k">good equilibrium</span>). They deposited 25 but are owed r&#8321;&middot;25 = 37.5.</p>
+
+          <p><span class="k">Where the extra comes from:</span> R is not realized yet, so the bank <span class="k">liquidates part of the long investment early</span> (each unit back to principal, 1). Type 1&rsquo;s own 25 covers only part &mdash; the remaining <span class="k">12.5 is drawn from Type 2&rsquo;s stake</span>. This cross-subsidy is exactly the <span class="k">liquidity insurance</span> the demand deposit provides.</p>
+
+        </div>
+
+        <!-- Period 2 optimal -->
+
+        <div class="th th-p2o">
+
+          <p>A depositor who waits to T=2 receives, per unit,</p>
+
+          <span class="eq">V&#8322;(f, r&#8321;) = max{ R(1 &minus; r&#8321;f)/(1 &minus; f), 0 } <span class="n">eq (3)</span></span>
+
+          <p>With only Type 1 withdrawing (f = t = &frac14;), V&#8322;&nbsp;&gt;&nbsp;r&#8321;, so Type 2 strictly prefer to wait. The 62.5 left invested matures to <span class="k">62.5&thinsp;&times;&thinsp;R = 125</span> for Type 2.</p>
+
+          <p>This is the <span class="k">good equilibrium</span> &mdash; it achieves <span class="k">optimal risk sharing</span> across the two types.</p>
+
+        </div>
+
+        <!-- Period 1 run -->
+
+        <div class="th th-p1r">
+
+          <p><span class="warn">Bank run.</span> Suppose a fraction f = &#8531; of depositors try to withdraw at T=1, instead of just the t = &frac14; who are true Type 1s &mdash; some Type 2 panic and withdraw early too.</p>
+
+          <p>On average, the r&#8321;&middot;25 = 37.5 owed to true Type 1s is still covered. But the bank pays whoever is in line as it liquidates &mdash; it can't top up the pool instantly &mdash; so in practice not every early claimant is made whole at the moment they ask: the dot animation shows one dot settling for <span class="k">less than its ring</span>, a stand-in for this <span class="k">sequential-service constraint</span>.</p>
+
+          <p>Meanwhile the bank must liquidate enough of the long asset to cover <span class="k">everyone</span> claiming early: total early claims = r&#8321;&middot;f&middot;100 = 50, so the slice taken from Type 2&rsquo;s stake doubles to <span class="k">25</span> (instead of 12.5). That leaves only <span class="k">50</span> of Type 2&rsquo;s principal still invested, instead of 62.5.</p>
+
+        </div>
+
+        <!-- Period 2 run -->
+
+
+
+      </div>
+
+    </div>
+
+  </aside>
+
+ 
+
+</div>
+
+</body>
+
+</html>
